@@ -128,14 +128,14 @@ while true; do
         for item in "${PENDING_LIST[@]}"; do
           echo " - $item"
         done
-      echo "共 ${#PENDING_LIST[@]} 筆變更。"
-      echo ">>>  發佈變更..."
-      run_cli publish \
-        --session-id "$SID" \
-        --format     json
-      PENDING_LIST=()
+        echo "共 ${#PENDING_LIST[@]} 筆變更。"
+        echo ">>>  發佈變更..."
+        run_cli publish \
+          --session-id "$SID" \
+          --format     json
+        PENDING_LIST=()
       else
-      echo "無可發佈的物件。"
+        echo "無可發佈的物件。"
       fi
       ;;
 
