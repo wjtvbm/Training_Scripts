@@ -33,6 +33,7 @@ if [[ -z "$SID" || "$SID" == "null" ]]; then
   echo "ERROR: 無法取得 SID, 請檢查伺服器位址，帳號或密碼。"
   exit 1
 fi
+echo
 echo "取得 SID = $SID"
 
 # ====== Helper 函式：以免執行 mgmt_cli 遇到錯誤退出 ======
