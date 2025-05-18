@@ -5,6 +5,7 @@
 # ==============================================================================
 #!/usr/bin/env bash
 set -euo pipefail
+#set -x
 
 # mgmt_cli 路徑 (若 mgmt_cli 不在 PATH 需填完整路徑)
 MGMT_CLI="mgmt_cli"
@@ -62,6 +63,9 @@ print_menu() {
   echo
 }
 
+# ====== 追蹤未發佈的變更 ======
+declare -a PENDING_LIST=()
+
 # ====== 互動主迴圈 ======
 while true; do
   print_menu
@@ -79,6 +83,7 @@ while true; do
         mask-length "$MASK" \
         --session-id "$SID" \
         --format     json
+      PENDING_LIST+=("Network: $NAME => $SUBNET/$MASK")
       ;;
 
     2)  # 新增 Host
@@ -90,6 +95,7 @@ while true; do
         ip-address  "$IP" \
         --session-id "$SID" \
         --format     json
+      PENDING_LIST+=("Host: $NAME => $IP")
       ;;
 
     3)  # 新增 Service-TCP
@@ -101,6 +107,7 @@ while true; do
         port        "$PORT" \
         --session-id "$SID" \
         --format     json
+      PENDING_LIST+=("Service-TCP: $NAME => TCP/$PORT")
       ;;
 
     4)  # 新增 Service-UDP
@@ -112,51 +119,50 @@ while true; do
         port        "$PORT" \
         --session-id "$SID" \
         --format     json
+      PENDING_LIST+=("Service-UDP: $NAME => UDP/$PORT")
       ;;
 
     5)  # Publish 變更
-      echo ">>> 發佈變更..."
+      echo ">>> 目前待發佈物件清單："
+      if (( ${#PENDING_LIST[@]} )); then
+        for item in "${PENDING_LIST[@]}"; do
+          echo " - $item"
+        done
+      echo "共 ${#PENDING_LIST[@]} 筆變更。"
+      echo ">>>  發佈變更..."
       run_cli publish \
         --session-id "$SID" \
         --format     json
+      PENDING_LIST=()
+      else
+      echo "無可發佈的物件。"
+      fi
       ;;
 
     6)  # Exit 前先檢查未發佈變更
-      echo ">>> 檢查未發佈的變更…"
-      # 抓 raw（包含 banner + JSON）
-      raw=$($MGMT_CLI show-changes \
-        --session-id "$SID" \
-        --format     json 2>&1)
-      # 只留下從第一個 { 開始的 JSON
-      json=$(echo "$raw" | sed -n '/^{/,$p')
-      # 計算所有頂層陣列的長度總和（若都沒有 array，結果為 0）
-      PENDING=$(echo "$json" \
-        | jq -r '[ .[] | select(type=="array") | length ] | add // 0')
-
-      if (( PENDING > 0 )); then
-        echo "目前有 $PENDING 筆變更尚未發佈。"
+      echo ">>> 檢查未發佈的變更..."
+      if (( ${#PENDING_LIST[@]} )); then
+        echo "找到 ${#PENDING_LIST[@]} 未發布的變更，如下所示:"
+        for item in "${PENDING_LIST[@]}"; do
+          echo " - $item"
+        done
         read -rp "是否要現在發佈？ [y/N]: " yn
         if [[ "$yn" =~ ^[Yy] ]]; then
-          echo ">>> 發佈變更…"
-          run_cli publish \
-            --session-id "$SID" \
-            --format     json
+          echo ">>> 發佈變更..."
+          run_cli publish --session-id "$SID" --format json
         else
-          echo "跳過發佈，登出。"
+          echo "跳過發佈。"
         fi
       else
         echo "無未發佈變更，登出。"
       fi
-
-      echo ">>> 登出中..."
-      run_cli logout \
-        --session-id "$SID" \
-        --format     json
+      echo ">>> 結束並登出"
+      run_cli logout --session-id "$SID" --format json
       break
       ;;
-
-
-    *)  echo "無效選項，請輸入 1–6。" ;;
+    *)
+      echo "無效選項，請輸入 1–6。"
+      ;;
   esac
 done
 
