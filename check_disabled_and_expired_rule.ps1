@@ -86,7 +86,8 @@ $packages = Invoke-RestMethod -Uri "$baseUrl/show-packages" -Method Post `
 for ($i = 0; $i -lt $packages.packages.Count; $i++) {
     Write-Host "$i. $($packages.packages[$i].name)"
 }
-$choice      = Read-Host "Enter the number of the desired package"
+$choice      = Read-Host "Enter the number of the desired package [0]"
+if ([string]::IsNullOrWhiteSpace($choice)) { $choice = '0' }
 $packageName = $packages.packages[$choice].name
 $packageResp = Invoke-RestMethod -Uri "$baseUrl/show-package" -Method Post `
                                  -Headers $headers `
