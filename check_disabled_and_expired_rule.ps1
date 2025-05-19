@@ -19,8 +19,10 @@ public class TrustAllCertsPolicy : ICertificatePolicy {
 [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
 
 # ====== Login parameters ======
-$mgmtServer = Read-Host "Enter Security Management Server IP"
-$mgmtUser   = Read-Host "Enter Username"
+$mgmtServer = Read-Host "Enter SMS IP (e.g. 10.0.1.100)"
+if ([string]::IsNullOrWhiteSpace($mgmtServer)) { $mgmtServer = '10.1.1.101' }
+$mgmtUser   = Read-Host "Enter Username [admin]"
+if ([string]::IsNullOrWhiteSpace($mgmtUser)) { $mgmtUser = 'admin' }
 $securePwd  = Read-Host "Enter Password" -AsSecureString
 $plainPwd   = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
                 [Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePwd))
