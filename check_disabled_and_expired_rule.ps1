@@ -65,9 +65,7 @@ do {
         $timeNames[$detail.uid] = $detail.name
 
         $endStruct = $null
-        if ($detail.PSObject.Properties.Name -contains 'to')   { $endStruct = $detail.to  }
-        if (-not $endStruct -and
-            $detail.PSObject.Properties.Name -contains 'end')  { $endStruct = $detail.end }
+        $endStruct = $detail.end
 
         if ($endStruct) {
             if ($endStruct.'iso-8601') {
