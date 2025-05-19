@@ -35,7 +35,7 @@ $loginResp = Invoke-RestMethod -Uri "$baseUrl/login" -Method Post `
 $headers   = @{ "X-chkp-sid" = $loginResp.sid }
 
 # ====== Ask days for “expiring soon” ======
-$daysInput = Read-Host "Enter days to treat as 'expiring soon' (default 30)"
+$daysInput = Read-Host "Enter days to treat as 'expiring soon' [30]"
 $days      = if ([string]::IsNullOrWhiteSpace($daysInput)) { 30 } else { [int]$daysInput }
 Write-Host "Rules ending within $days days will be marked as 'Expiring soon'."
 
