@@ -19,7 +19,7 @@ MAIL_TO="user1@domain.com;user2@domain.com" # 多人用 ; 或 , 分隔
 # ====== SMS 資料 ======
 MGMT_SERVER="127.0.0.1"
 MGMT_USER="admin"
-MGMT_PASS="Hi,CheckPoint"
+MGMT_PASS="admin_Password_of_SMS"
 # ====== 定義幾天算是 "soon" ======
 DAYS=30
 # ====== 寄信後要不要刪除 report (1 = 刪除, 0 = 保留) ======
