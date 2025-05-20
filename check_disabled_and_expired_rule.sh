@@ -1,3 +1,8 @@
+# ==============================================================================
+#  MAIL Disabled / Expired / Expiring‑Soon Rules in R82 Management via Web API
+#  Author: Visual Wu
+#  Date: 2025‑05‑20
+# ==============================================================================
 #!/usr/bin/env bash
 set -euo pipefail
 #set -x
