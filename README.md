@@ -8,7 +8,7 @@
 ![check_disabled_and_expired_rule.sh](/img/check_disabled_and_expired_rule.sh-1.png "Sample Report")
 
 ### check_disabled_and_expired_rule.ps1
-這個跟[check_disabled_and_expired_rule.sh] (https://github.com/wjtvbm/Training_Scripts/blob/main/check_disabled_and_expired_rule.sh) 有 87 分像，主要是在 Windows 用 PowerShell 執行，然後只會出 csv 報表。
+這個跟 [check_disabled_and_expired_rule.sh](https://github.com/wjtvbm/Training_Scripts/blob/main/check_disabled_and_expired_rule.sh) 有 87 分像，主要是在 Windows 用 PowerShell 執行，然後只會出 csv 報表。
 
 ### check_hit-count.ps1
 這個 PowerShell 主要是把 SMS 裡面所有的 rule 的 hit counts 列出到 csv 中。
