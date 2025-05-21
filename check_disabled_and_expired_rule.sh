@@ -26,9 +26,11 @@ DAYS=30
 DELETE_AFTER_MAIL=1
 # ====== 以上是設定 ======
 
+START_API=$(date +%s)
 NOW=$(date +%s)
 IN_X_DAYS=$(date --date="$DAYS days" +%s)
 
+# ====== 登入 ======
 if [[ "$(id -u)" -eq 0 && ( "$MGMT_SERVER" == "127.0.0.1" || "$MGMT_SERVER" == "localhost" ) ]]; then
   mgmt_cli login -r true --format json > session.json
 else
@@ -56,7 +58,7 @@ done
 mgmt_cli show-packages --format json --session-file session.json > packages.json
 mapfile -t PACKAGES < <(jq -r '.packages[].name' packages.json)
 
-# ====== 報表 ======
+# ====== 準備報表 ======
 TS=$(date +'%Y%m%d_%H%M%S')
 OUTDIR="./CheckRules_HTML_$TS"; mkdir -p "$OUTDIR"
 HTML="$OUTDIR/report.html"
@@ -79,41 +81,57 @@ cat > "$HTML" <<EOF
 <body>
   <h1>Check Point Rule Report</h1>
   <p>Generated: $GEN_DATE</p>
+  <p>Script (API) execution time: __API_TIME__ seconds</p>
 EOF
 
 # ====== render_table ======
 function render_table {
   local title=$1; shift
-  local lines=("$@")
+  local -n arr=$1; shift
   echo "  <h2>$title</h2>" >> "$HTML"
-  if (( ${#lines[@]} == 1 )); then
+
+  if (( ${#arr[@]} == 1 )); then
     echo "  <p><em>No rules in this category.</em></p>" >> "$HTML"
     return
   fi
+  # 計算資料筆數 (扣掉 header)
+  local cnt=$(( ${#arr[@]} - 1 ))
+  echo "  <p>Total: $cnt rules</p>" >> "$HTML"
   echo "  <table>" >> "$HTML"
-  IFS=',' read -ra HEAD <<< "${lines[0]}"
+  IFS=',' read -ra HEAD <<< "${arr[0]}"
   echo "    <tr>" >> "$HTML"
-  for cell in "${HEAD[@]}"; do echo "      <th>${cell}</th>" >> "$HTML"; done
+  echo "      <th>No.</th>" >> "$HTML"
+  for cell in "${HEAD[@]}"; do
+    echo "      <th>${cell}</th>" >> "$HTML"
+  done
   echo "    </tr>" >> "$HTML"
-  for ((i=1; i<${#lines[@]}; i++)); do
-    IFS=',' read -ra COLS <<< "${lines[i]}"
+
+  for ((i=1; i<${#arr[@]}; i++)); do
+    IFS=',' read -ra COLS <<< "${arr[i]}"
     echo "    <tr>" >> "$HTML"
-    for cell in "${COLS[@]}"; do echo "      <td>${cell}</td>" >> "$HTML"; done
+    echo "      <td>$i</td>" >> "$HTML"
+    for cell in "${COLS[@]}"; do
+      echo "      <td>${cell}</td>" >> "$HTML"
+    done
     echo "    </tr>" >> "$HTML"
   done
+
   echo "  </table>" >> "$HTML"
 }
 
-# ====== 抓取並分類所有 Rules ======
-declare -a DISABLED EXPIRED SOON
-declare -A SEEN
-HEADER="Package,Layer,UID,Name,Comment,Number,Action,Enabled,Source,Destination,Service,TimeObjs"
-DISABLED+=("$HEADER"); EXPIRED+=("$HEADER"); SOON+=("$HEADER")
+# ====== 初始化三個分類陣列 ======
+HEADER="Package,Layer,UID,Name,Comment,Number,Action,Enabled,Source,Destination,Service,TimeObjs,Expires"
+DISABLED=("$HEADER")
+EXPIRED=("$HEADER")
+SOON=("$HEADER")
 
+# ====== 抓取並分類所有 Rules ======
+declare -A SEEN
 for PACKAGE in "${PACKAGES[@]}"; do
   mgmt_cli show-package name "$PACKAGE" --format json --session-file session.json \
     > "$OUTDIR/pkg_$PACKAGE.json"
   mapfile -t LAYERS < <(jq -r '.["access-layers"][] | .name' "$OUTDIR/pkg_$PACKAGE.json")
+
   for LAYER in "${LAYERS[@]}"; do
     LIMIT=500; OFFSET=0
     while :; do
@@ -127,13 +145,14 @@ for PACKAGE in "${PACKAGES[@]}"; do
 
       mapfile -t RULES < <(echo "$RESP" \
         | jq -c '.rulebase[] | recurse(.rulebase[]?) | select(.type=="access-rule")')
+
       for RULE in "${RULES[@]}"; do
         RULE_UID=$(echo "$RULE" | jq -r '.uid')
         key="$PACKAGE|$LAYER|$RULE_UID"
         [[ -n "${SEEN[$key]:-}" ]] && continue
         SEEN[$key]=1
 
-        NAME=$(echo "$RULE" | jq -r '.name' | sed 's/,/;/g')
+        NAME=$(echo "$RULE" | jq -r '.name'      | sed 's/,/;/g')
         COMMENT=$(echo "$RULE" | jq -r '.comments//""' | sed 's/,/;/g')
         NUM=$(echo "$RULE" | jq -r '."rule-number"')
         ACT=$(echo "$RULE" | jq -r 'if (.action|type)=="object" then .action.name else .action end')
@@ -143,21 +162,36 @@ for PACKAGE in "${PACKAGES[@]}"; do
         SVC=$(echo "$RULE" | jq -r '[.service[]?|if type=="string" then . else .name end]|unique|join(";")')
         TM=$(echo "$RULE" | jq -r '[.time[]?|if type=="string" then . else .name end]|unique|join(";")')
 
-        EXP="none"; HAS_TIME=false
+        # 計算 Expires 欄位
+        EXP="none"; HAS_TIME=false; EXPIRES=""
         for TUID in $(echo "$RULE" | jq -r '[.time[]?|if type=="string" then . else .uid end]|join(" ")'); do
           if [[ -n "${TIME_ENDS[$TUID]:-}" ]]; then
             HAS_TIME=true
             TS_END=${TIME_ENDS[$TUID]}
-            (( TS_END < NOW )) && { EXP="expired"; break; }
-            (( TS_END <= IN_X_DAYS )) && EXP="soon"
+            if (( TS_END < NOW )); then
+              EXP="expired"
+              EXPIRES=$(date -d "@$TS_END" +'%Y/%m/%d')
+              break
+            elif (( TS_END <= IN_X_DAYS )); then
+              EXP="soon"
+              days=$(( (TS_END - NOW)/86400 ))
+              ds=$(date -d "@$TS_END" +'%Y/%m/%d')
+              EXPIRES="in $days days ($ds)"
+            fi
           fi
         done
 
-        LINE="$PACKAGE,$LAYER,$RULE_UID,$NAME,$COMMENT,$NUM,$ACT,$EN,$SRC,$DST,$SVC,$TM"
-        [[ "$EN" != "true" ]] && DISABLED+=("$LINE")
-        if [[ "$HAS_TIME" == true ]]; then
-          [[ "$EXP" == "expired" ]] && EXPIRED+=("$LINE")
-          [[ "$EXP" == "soon"    ]] && SOON+=("$LINE")
+        LINE="$PACKAGE,$LAYER,$RULE_UID,$NAME,$COMMENT,$NUM,$ACT,$EN,$SRC,$DST,$SVC,$TM,$EXPIRES"
+
+        if [[ "$EN" != "true" ]]; then
+          DISABLED+=("${LINE%,*},N/A")
+          continue
+        fi
+
+        if [[ "$HAS_TIME" == true && "$EXP" == "expired" ]]; then
+          EXPIRED+=( "$LINE" )
+        elif [[ "$HAS_TIME" == true && "$EXP" == "soon" ]]; then
+          SOON+=( "$LINE" )
         fi
       done
 
@@ -168,33 +202,32 @@ for PACKAGE in "${PACKAGES[@]}"; do
     done
   done
 done
+END_API=$(date +%s)
+API_TIME=$(( END_API - START_API ))
 
 # ====== 輸出 ======
-render_table "Disabled Rules"    "${DISABLED[@]}"
-render_table "Expired Rules"     "${EXPIRED[@]}"
-render_table "Expiring Soon Rules" "${SOON[@]}"
+render_table "Disabled Rules"    DISABLED
+render_table "Expired Rules"     EXPIRED
+render_table "Expiring Soon Rules (in ${DAYS} Days)" SOON
 
 cat >> "$HTML" <<EOF
 </body>
 </html>
 EOF
+sed -i "s/__API_TIME__/${API_TIME}/" "$HTML"
 
 # ====== 用 Python 發信 ======
 python3 <<PYCODE
 import smtplib
 from email.mime.text import MIMEText
-
 with open("$HTML", encoding="utf-8") as f:
     html = f.read()
-
 raw = """$MAIL_TO"""
 addrs = [a.strip() for a in raw.replace(';',',').split(',') if a.strip()]
-
 msg = MIMEText(html, 'html', 'utf-8')
 msg['Subject'] = "Check Point Rule Report $GEN_DATE"
 msg['From']    = "$MAIL_FROM"
 msg['To']      = ", ".join(addrs)
-
 server = smtplib.SMTP("$SMTP_SERVER", $SMTP_PORT)
 server.starttls()
 server.login("$SMTP_USER", "$SMTP_PASS")
@@ -204,7 +237,5 @@ PYCODE
 
 # ====== logout ======
 mgmt_cli logout --session-file session.json &> /dev/null
-rm -rf packages.json session.json $OUTDIR/pkg_$PACKAGE.json
-if (( DELETE_AFTER_MAIL )); then
-        rm -rf $OUTDIR
-fi
+rm -rf packages.json session.json $OUTDIR/pkg_*.json
+(( DELETE_AFTER_MAIL )) && rm -rf "$OUTDIR"
