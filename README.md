@@ -14,3 +14,13 @@
 這個 PowerShell 主要是把 SMS 裡面所有的 rule 的 hit counts 列出到 csv 中。
 
 ![check_hit-count.ps1](/img/check_hit-count.ps1-1.jpg "Sample csv")
+
+### check-domain-cache.sh
+這個 Bash script 是檢查 **Gateway** 中 Domain object 快取的情況 (fw ctl multik print_bl dns_reverse_cache_tbl)
+
+![check-domain-cache.sh](/img/check-domain-cache.sh-1.png "Sample")
+
+### create_object.sh
+這個 Bash script 是透過 Web Service 用選單形式讓使用者
+
+![create_object.sh](/img/create_object.sh-1.png "Sample")
